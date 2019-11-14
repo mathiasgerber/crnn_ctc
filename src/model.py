@@ -2,13 +2,14 @@ from __future__ import division
 from __future__ import print_function
 
 import os
-my_path = os.path.abspath(os.path.dirname(__file__))
-os.environ['TF_ENABLE_COND_V2'] = '1'
 
 import numpy as np
 import tensorflow as tf
 
 from md_lstm import multi_dimensional_rnn_while_loop
+
+my_path = os.path.abspath(os.path.dirname(__file__))
+os.environ['TF_ENABLE_COND_V2'] = '1'
 
 
 class ModelValues:

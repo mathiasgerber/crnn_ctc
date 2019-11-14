@@ -1,11 +1,12 @@
 import os
 import argparse
-my_path = os.path.abspath(os.path.dirname(__file__))
 
 import editdistance
 
 from dataloader import DataLoader
 from model import ModelValues, Model
+
+my_path = os.path.abspath(os.path.dirname(__file__))
 
 
 class FilePaths:

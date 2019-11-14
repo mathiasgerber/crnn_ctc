@@ -3,6 +3,7 @@ import os
 from tensorflow.contrib.rnn import RNNCell, LSTMStateTuple
 from tensorflow.contrib.rnn.python.ops.core_rnn_cell import _linear
 from tensorflow.python.ops.rnn import dynamic_rnn
+
 os.environ['TF_ENABLE_COND_V2'] = '1'
 
 """
