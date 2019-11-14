@@ -1,4 +1,4 @@
-transferarbeit
+CRNN with CTC-Loss
 ==============================
 
 Deep Learning Project with 2 neural networks, CNN-1D-LSTM-ctc/CNN-2D-LSTM-ctc, for handwritten text recognition
