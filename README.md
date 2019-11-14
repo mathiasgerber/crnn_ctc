@@ -1,11 +1,15 @@
 CRNN with CTC-Loss
 ==============================
 
-Deep Learning Project with 2 neural networks, CNN-1D-LSTM-ctc/CNN-2D-LSTM-ctc, for handwritten text recognition
+Deep Learning Project with 2 neural networks, CNN-1D-LSTM-ctc/CNN-2D-LSTM-ctc, for handwritten text recognition.
 
 MD-LSTM Implementation is from https://github.com/philipperemy/tensorflow-multi-dimensional-lstm.
 
 The dataloader is from https://github.com/githubharald/SimpleHTR.
+
+Data used for training is the IAM-Words database.
+
+This project is done as part of my studies.
 
 Project Organization
 ------------
