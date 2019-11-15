@@ -11,3 +11,4 @@ numpy
 tensorflow=1.14
 opencv-python
 editdistance
+gast=0.2.2

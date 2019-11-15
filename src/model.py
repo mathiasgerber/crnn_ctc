@@ -44,8 +44,10 @@ class Model:
                                                 ModelValues.image_size[1]))
 
         if multi_dimensional:
+            print("Multi-dimensional LSTM")
             self.setup_md_lstm()
         else:
+            print("Using one-dimensional LSTM")
             self.setup_od_lstm()
         self.setup_ctc()
 
@@ -54,8 +56,8 @@ class Model:
         self.update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
 
         with tf.control_dependencies(self.update_ops):
-            self.optimizer = tf.train.AdagradOptimizer(
-                self.learning_rate).minimize(self.loss)
+            self.optimizer = tf.train.AdadeltaOptimizer(self.learning_rate)\
+                .minimize(self.loss)
 
         (self.session, self.saver) = self.setup_tf()
 
@@ -63,55 +65,78 @@ class Model:
         """
         create CNN and rnn layers and return output of these layers
         """
-
+        print("using od_lstm")
         cnnIn4d = tf.expand_dims(input=self.input_imgs, axis=3)
+
         # list of parameters for the layers
+
         kernelVals = [5, 5, 3, 3, 3]
+
         featureVals = [1, 32, 64, 128, 128, 256]
+
         strideVals = poolVals = [(2, 2), (2, 2), (1, 2), (1, 2), (1, 2)]
+
         numLayers = len(strideVals)
 
         # create layers
+
         pool = cnnIn4d  # input to first CNN layer
+
         for i in range(numLayers):
             kernel = tf.Variable(tf.truncated_normal(
                 [kernelVals[i], kernelVals[i], featureVals[i],
                  featureVals[i + 1]], stddev=0.1))
+
             conv = tf.nn.conv2d(pool, kernel, padding='SAME',
                                 strides=(1, 1, 1, 1))
+
             conv_norm = tf.layers.batch_normalization(conv,
                                                       training=self.is_train)
-            relu = tf.nn.relu(conv_norm)
-            pool = tf.nn.max_pool(relu,
-                                  (1, poolVals[i][0], poolVals[i][1], 1), (
-                                  1, strideVals[i][0], strideVals[i][1],
-                                  1), 'VALID')
-        cnnOut4d = pool
 
-        rnnIn3d = tf.squeeze(cnnOut4d, axis=[2])
+            relu = tf.nn.relu(conv_norm)
+
+            pool = tf.nn.max_pool(relu, (1, poolVals[i][0], poolVals[i][1], 1),
+                                  (1, strideVals[i][0], strideVals[i][1], 1),
+                                  'VALID')
+
+        self.cnnOut4d = pool
+
+        rnnIn3d = tf.squeeze(self.cnnOut4d, axis=[2])
+
         # basic cells which is used to build RNN
+
         numHidden = 256
-        cells = [tf.contrib.rnn.LSTMCell(num_units=numHidden,
-                                         state_is_tuple=True) for _ in
-                 range(2)]  # 2 layers
+
+        cells = [
+            tf.contrib.rnn.LSTMCell(num_units=numHidden, state_is_tuple=True)
+            for _ in range(2)]  # 2 layers
+
         # stack basic cells
+
         stacked = tf.contrib.rnn.MultiRNNCell(cells, state_is_tuple=True)
+
         # bidirectional RNN
+
         # BxTxF -> BxTx2H
+
         ((fw, bw), _) = tf.nn.bidirectional_dynamic_rnn(cell_fw=stacked,
                                                         cell_bw=stacked,
                                                         inputs=rnnIn3d,
                                                         dtype=rnnIn3d.dtype)
+
         # BxTxH + BxTxH -> BxTx2H -> BxTx1X2H
+
         concat = tf.expand_dims(tf.concat([fw, bw], 2), 2)
-        # project output to chars (including blank): BxTx1x2H -> BxTx1xC ->
-        # BxTxC
-        kernel = tf.Variable(tf.truncated_normal(
-            [1, 1, numHidden * 2, len(self.char_list) + 1], stddev=0.1))
-        self.rnn_output = tf.squeeze(tf.nn.atrous_conv2d(value=concat,
-                                                         filters=kernel,
-                                                         rate=1,
-                                     padding='SAME'), axis=[2])
+
+        # project output to chars (including blank): BxTx1x2H -> BxTx1xC -> BxTxC
+
+        kernel = tf.Variable(
+            tf.truncated_normal([1, 1, numHidden * 2, len(self.char_list) + 1],
+                                stddev=0.1))
+
+        self.rnn_output = tf.squeeze(
+            tf.nn.atrous_conv2d(value=concat, filters=kernel, rate=1,
+                                padding='SAME'), axis=[2])
 
     def setup_md_lstm(self):
         """
@@ -119,6 +144,7 @@ class Model:
         from https://github.com/philipperemy/tensorflow-multi-dimensional-lstm
         :return: returns the output of the last LSTM for the decoder.
         """
+        print("using md_lstm")
         cnn_input = tf.expand_dims(input=self.input_imgs, axis=3)
         pool = cnn_input
 
@@ -225,7 +251,7 @@ class Model:
         if latest_snapshot:
             saver.restore(session, latest_snapshot)
         else:
-            print(session.run(tf.global_variables_initializer()))
+            session.run(tf.global_variables_initializer())
 
         return session, saver
 
@@ -276,8 +302,8 @@ class Model:
         """
         num_batch_elements = len(batch.images)
         sparse = self.to_sparse(batch.gt_texts)
-        rate = 0.01 if self.batches_trained < 10 else \
-            (0.001 if self.batches_trained < 10000 else 0.0001)
+        rate = 1.0 if self.batches_trained < 10 else \
+            (1.0 if self.batches_trained < 10000 else 0.01)
         eval_list = [self.optimizer, self.loss]
         feed_dict = {self.input_imgs: batch.images, self.gt_texts: sparse,
                      self.seq_length:

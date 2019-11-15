@@ -1,2 +1,2 @@
-model_checkpoint_path: "snapshot-10"
-all_model_checkpoint_paths: "snapshot-10"
+model_checkpoint_path: "C:\\Users\\I0319914\\PycharmProjects\\transferarbeit\\CRNN\\src\\../model/snapshot-1"
+all_model_checkpoint_paths: "C:\\Users\\I0319914\\PycharmProjects\\transferarbeit\\CRNN\\src\\../model/snapshot-1"
