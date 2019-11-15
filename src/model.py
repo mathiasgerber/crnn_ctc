@@ -78,16 +78,14 @@ class Model:
                 [kernelVals[i], kernelVals[i], featureVals[i],
                  featureVals[i + 1]], stddev=0.1))
             conv = tf.nn.conv2d(pool, kernel, padding='SAME',
-                                strides=(1, strideVals[i][0],
-                                         strideVals[i][1], 1))
+                                strides=(1, 1, 1, 1))
             conv_norm = tf.layers.batch_normalization(conv,
                                                       training=self.is_train)
-            pool = tf.nn.relu(conv_norm)
+            relu = tf.nn.relu(conv_norm)
             pool = tf.nn.max_pool(relu,
                                   (1, poolVals[i][0], poolVals[i][1], 1), (
                                   1, strideVals[i][0], strideVals[i][1],
                                   1), 'VALID')
-            print(pool.shape)
         cnnOut4d = pool
 
         rnnIn3d = tf.squeeze(cnnOut4d, axis=[2])
@@ -136,19 +134,19 @@ class Model:
                              strides=(1, 2, 4, 1))
         relu2 = tf.nn.relu6(conv2)
 
-        # md_2, _ = multi_dimensional_rnn_while_loop(32, relu2, sh=(1, 1),
-        #                                          scope_n='layer2')
+        md_2, _ = multi_dimensional_rnn_while_loop(32, relu2, sh=(1, 1),
+                                                 scope_n='layer2')
 
         kernel2 = tf.Variable(tf.truncated_normal([2, 4, 32, 64], stddev=0.1))
-        conv3 = tf.nn.conv2d(relu2, kernel2, padding='SAME',
+        conv3 = tf.nn.conv2d(md_2, kernel2, padding='SAME',
                              strides=(1, 2, 4, 1))
         relu3 = tf.nn.relu6(conv3)
 
-        # md_3, _ = multi_dimensional_rnn_while_loop(64, relu3, sh=(1, 1),
-        #                                            scope_n='layer3')
+        md_3, _ = multi_dimensional_rnn_while_loop(64, relu3, sh=(1, 1),
+                                                   scope_n='layer3')
 
         kernel3 = tf.Variable(tf.truncated_normal([1, 2, 64, 128], stddev=0.1))
-        conv4 = tf.nn.conv2d(relu3, kernel3, padding='SAME',
+        conv4 = tf.nn.conv2d(md_3, kernel3, padding='SAME',
                              strides=(1, 1, 2, 1))
         relu4 = tf.nn.relu6(conv4)
 
@@ -166,7 +164,6 @@ class Model:
                                                         dtype=rnn_input.dtype)
 
         concat = tf.expand_dims(tf.concat([fw, bw], 2), 2)
-        # concat = tf.Print(concat, [concat], "nach bi lstm")
 
         kernel = tf.Variable(tf.truncated_normal([1, 1, num_hidden * 2,
                                                   len(self.char_list) + 1],
