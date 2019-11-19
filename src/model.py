@@ -48,7 +48,7 @@ class Model:
             self.setup_md_lstm()
         else:
             print("Using one-dimensional LSTM")
-            self.setup_od_lstm()
+            self.setup_od_puigcever()
         self.setup_ctc()
 
         self.batches_trained = 0
@@ -60,6 +60,65 @@ class Model:
                 .minimize(self.loss)
 
         (self.session, self.saver) = self.setup_tf()
+
+    def setup_od_puigcever(self):
+        """
+        reconstruct the implementation from puigcerver. (1D-LSTM)
+        """
+        cnn_input = tf.expand_dims(input=self.input_imgs, axis = 3)
+
+        kernel_values = [3, 3, 3, 3, 3]
+        feature_values = [1, 16, 32, 48, 64, 80]
+        layer_count = len(kernel_values)
+
+        pool = cnn_input
+
+        for i in range(layer_count):
+            print(pool.shape)
+            if i >= 2:
+                pool = tf.nn.dropout(pool, rate=0.2)
+            kernel = tf.Variable(tf.truncated_normal(
+                [kernel_values[i], kernel_values[i], feature_values[i],
+                 feature_values[i + 1]], stddev=0.1))
+            conv = tf.nn.conv2d(pool, kernel, padding="SAME", strides=(1, 1,
+                                                                       1, 1))
+            print(conv.shape)
+            conv_norm = tf.layers.batch_normalization(conv,
+                                                      training=self.is_train)
+            pool = tf.nn.leaky_relu(conv_norm, alpha=0.01)
+            if i <= 1:
+                pool = tf.nn.max_pool(pool, (1, 2, 2, 1), (1, 2, 2, 1),
+                                      "VALID")
+            else:
+                pool = tf.nn.max_pool(pool, (1, 1, 2, 1), (1, 1, 2, 1),
+                                      "VALID")
+
+        rnn_input = tf.squeeze(pool, axis=[2])
+
+        numHidden = 256
+        cells = [
+            tf.contrib.rnn.LSTMCell(num_units=numHidden, state_is_tuple=True)
+            for _ in range(2)]  # 2 layers
+
+        # stack basic cells
+        stacked = tf.contrib.rnn.MultiRNNCell(cells, state_is_tuple=True)
+
+        # bidirectional RNN
+
+        ((fw, bw), _) = tf.nn.bidirectional_dynamic_rnn(cell_fw=stacked,
+                                                        cell_bw=stacked,
+                                                        inputs=rnn_input,
+                                                        dtype=rnn_input.dtype)
+
+        concat = tf.expand_dims(tf.concat([fw, bw], 2), 2)
+
+        kernel = tf.Variable(
+            tf.truncated_normal([1, 1, numHidden * 2, len(self.char_list) + 1],
+                                stddev=0.1))
+
+        self.rnn_output = tf.squeeze(
+            tf.nn.atrous_conv2d(value=concat, filters=kernel, rate=1,
+                                padding='SAME'), axis=[2])
 
     def setup_od_lstm(self):
         """
@@ -132,31 +191,34 @@ class Model:
 
         kernel = tf.Variable(tf.truncated_normal([3, 3, 1, 16], stddev=0.1))
         conv = tf.nn.conv2d(pool, kernel, padding='SAME', strides=(1, 1, 1, 1))
-        relu = tf.nn.relu6(conv)
+        relu = tf.nn.leaky_relu(conv)
+        drop = tf.nn.dropout(relu, rate=0.4)
 
-        md_1, _ = multi_dimensional_rnn_while_loop(16, relu, sh=(1, 1),
+        md_1, _ = multi_dimensional_rnn_while_loop(16, drop, sh=(1, 1),
                                                 scope_n='layer1')
 
         kernel1 = tf.Variable(tf.truncated_normal([2, 4, 16, 32], stddev=0.1))
         conv2 = tf.nn.conv2d(md_1, kernel1, padding='SAME',
                              strides=(1, 2, 4, 1))
-        relu2 = tf.nn.relu6(conv2)
+        relu2 = tf.nn.leaky_relu(conv2)
+        drop2 = tf.nn.dropout(relu2, rate=0.4)
 
-        md_2, _ = multi_dimensional_rnn_while_loop(32, relu2, sh=(1, 1),
+        md_2, _ = multi_dimensional_rnn_while_loop(32, drop2, sh=(1, 1),
                                                  scope_n='layer2')
 
         kernel2 = tf.Variable(tf.truncated_normal([2, 4, 32, 64], stddev=0.1))
         conv3 = tf.nn.conv2d(md_2, kernel2, padding='SAME',
                              strides=(1, 2, 4, 1))
-        relu3 = tf.nn.relu6(conv3)
+        relu3 = tf.nn.leaky_relu(conv3)
+        drop3 = tf.nn.dropout(relu3, rate=0.4)
 
-        md_3, _ = multi_dimensional_rnn_while_loop(64, relu3, sh=(1, 1),
+        md_3, _ = multi_dimensional_rnn_while_loop(64, drop3, sh=(1, 1),
                                                    scope_n='layer3')
 
         kernel3 = tf.Variable(tf.truncated_normal([1, 2, 64, 128], stddev=0.1))
         conv4 = tf.nn.conv2d(md_3, kernel3, padding='SAME',
                              strides=(1, 1, 2, 1))
-        relu4 = tf.nn.relu6(conv4)
+        relu4 = tf.nn.leaky_relu(conv4)
 
         rnn_input = tf.squeeze(relu4, axis=[2])
 
