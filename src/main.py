@@ -16,7 +16,8 @@ class FilePaths:
     fn_char_list = os.path.join(my_path, '../../data/char_list')
     fn_train = os.path.join(my_path, '../../data/')
     fn_corpus = os.path.join(my_path, '../../data/corpus.txt')
-    fn_accuracy = os.path.join(my_path, '../model/accuracy.txt')
+    fn_accuracy_md = os.path.join(my_path, '../model/accuracy_md.txt')
+    fn_accuracy_od = os.path.join(my_path, '../model/accuracy_od.txt')
 
 
 def main():
@@ -44,14 +45,14 @@ def main():
 
     if args.train_md:
         model = Model(loader.char_list, True)
-        train(model, loader)
+        train(model, loader, True)
     elif args.train_od:
         model = Model(loader.char_list, False)
-        train(model, loader)
+        train(model, loader, False)
     else:
         print("Wrong argument.")
 
-def train(model, loader):
+def train(model, loader, md_bool):
     """
     Function that trains Batches in a while loop.
     :param model: The Model which will be trained
@@ -81,10 +82,22 @@ def train(model, loader):
             best_char_error_rate = char_error_rate
             no_improvement_since = 0
             model.save()
-            open(FilePaths.fn_accuracy, 'w').write('Validation character '
-                                                   'error rate of saved model:'
-                                                   ' %f%%' %
-                                                   (char_error_rate*100.0))
+            if md_bool:
+                open(FilePaths.fn_accuracy_md, 'w').write('Validation '
+                                                          'character'
+                                                          ' error rate of '
+                                                          'saved md_model: '
+                                                          '%f%%' %
+                                                          (char_error_rate*
+                                                           100.0))
+            else:
+                open(FilePaths.fn_accuracy_od, 'w').write('Validation '
+                                                          'character'
+                                                          ' error rate of '
+                                                          'saved od_model: '
+                                                          '%f%%' %
+                                                          (char_error_rate *
+                                                           100.0))
 
         else:
             no_improvement_since += 1
