@@ -56,7 +56,7 @@ class Model:
         self.update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
 
         with tf.control_dependencies(self.update_ops):
-            self.optimizer = tf.train.AdadeltaOptimizer(self.learning_rate)\
+            self.optimizer = tf.train.RMSPropOptimizer(self.learning_rate)\
                 .minimize(self.loss)
 
         (self.session, self.saver) = self.setup_tf()
@@ -76,7 +76,7 @@ class Model:
         for i in range(layer_count):
             print(pool.shape)
             if i >= 2:
-                pool = tf.nn.dropout(pool, rate=0.2)
+                pool = tf.nn.dropout(pool, rate=0.4)
             kernel = tf.Variable(tf.truncated_normal(
                 [kernel_values[i], kernel_values[i], feature_values[i],
                  feature_values[i + 1]], stddev=0.1))
@@ -189,39 +189,31 @@ class Model:
         cnn_input = tf.expand_dims(input=self.input_imgs, axis=3)
         pool = cnn_input
 
-        kernel = tf.Variable(tf.truncated_normal([3, 3, 1, 16], stddev=0.1))
-        conv = tf.nn.conv2d(pool, kernel, padding='SAME', strides=(1, 1, 1, 1))
-        relu = tf.nn.leaky_relu(conv)
-        drop = tf.nn.dropout(relu, rate=0.4)
+        kernel_values = [(3, 3), (2, 4), (2, 4)]
+        feature_values = [1, 16, 32, 64]
+        strides = [(1, 1), (2, 4), (2, 4)]
+        count = len(strides)
 
-        md_1, _ = multi_dimensional_rnn_while_loop(16, drop, sh=(1, 1),
-                                                scope_n='layer1')
+        for i in range(count):
+            kernel = tf.Variable(tf.truncated_normal([kernel_values[i][0],
+                                                      kernel_values[i][1],
+                                                      feature_values[i],
+                                                      feature_values[i + 1]],
+                                                     stddev=0.1))
+            conv = tf.nn.conv2d(pool, kernel, padding="SAME",
+                                strides=(1, strides[i][0], strides[i][1]))
+            relu = tf.nn.leaky_relu(conv)
+            drop = tf.nn.dropout(relu, rate=0.4)
+            pool, _ = multi_dimensional_rnn_while_loop(feature_values[i + 1],
+                                                       drop, sh=(1, 1),
+                                                       scope_n='layer')
 
-        kernel1 = tf.Variable(tf.truncated_normal([2, 4, 16, 32], stddev=0.1))
-        conv2 = tf.nn.conv2d(md_1, kernel1, padding='SAME',
-                             strides=(1, 2, 4, 1))
-        relu2 = tf.nn.leaky_relu(conv2)
-        drop2 = tf.nn.dropout(relu2, rate=0.4)
-
-        md_2, _ = multi_dimensional_rnn_while_loop(32, drop2, sh=(1, 1),
-                                                 scope_n='layer2')
-
-        kernel2 = tf.Variable(tf.truncated_normal([2, 4, 32, 64], stddev=0.1))
-        conv3 = tf.nn.conv2d(md_2, kernel2, padding='SAME',
-                             strides=(1, 2, 4, 1))
-        relu3 = tf.nn.leaky_relu(conv3)
-        drop3 = tf.nn.dropout(relu3, rate=0.4)
-
-        md_3, _ = multi_dimensional_rnn_while_loop(64, drop3, sh=(1, 1),
-                                                   scope_n='layer3')
-
-        kernel3 = tf.Variable(tf.truncated_normal([1, 2, 64, 128], stddev=0.1))
-        conv4 = tf.nn.conv2d(md_3, kernel3, padding='SAME',
+        kernel = tf.Variable(tf.truncated_normal([1, 2, 64, 128], stddev=0.1))
+        conv = tf.nn.conv2d(pool, kernel, padding='SAME',
                              strides=(1, 1, 2, 1))
-        relu4 = tf.nn.leaky_relu(conv4)
+        relu = tf.nn.leaky_relu(conv)
 
-        rnn_input = tf.squeeze(relu4, axis=[2])
-
+        rnn_input = tf.squeeze(relu, axis=[2])
         num_hidden = 128
         cells = [tf.contrib.rnn.LSTMCell(num_units=num_hidden,
                                          state_is_tuple=True)
@@ -346,8 +338,8 @@ class Model:
         """
         num_batch_elements = len(batch.images)
         sparse = self.to_sparse(batch.gt_texts)
-        rate = 1.0 if self.batches_trained < 10 else \
-            (1.0 if self.batches_trained < 10000 else 0.01)
+        rate = 0.001 # if self.batches_trained < 10 else \
+        #     (0.001 if self.batches_trained < 10000 else 0.001)
         eval_list = [self.optimizer, self.loss]
         feed_dict = {self.input_imgs: batch.images, self.gt_texts: sparse,
                      self.seq_length:
@@ -392,12 +384,15 @@ class Model:
 
         return texts, probs
 
-    def save(self):
+    def save(self, md_bool):
         """
         Saves the model.
         """
         self.snap_id += 1
-        model_path = os.path.join(my_path, '../model/snapshot')
+        if md_bool:
+            model_path = os.path.join(my_path, '../model/md_rmsprob_0.4')
+        else:
+            model_path = os.path.join(my_path, '../model/od_rmsprob_0.4')
         self.saver.save(self.session, model_path,
                         global_step=self.snap_id)
 

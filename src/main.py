@@ -62,7 +62,7 @@ def train(model, loader, md_bool):
     epoch = 0
     best_char_error_rate = float('inf')
     no_improvement_since = 0
-    early_stopping = 5
+    early_stopping = 20
 
     while True:
         epoch += 1
@@ -81,7 +81,7 @@ def train(model, loader, md_bool):
         if char_error_rate < best_char_error_rate:
             best_char_error_rate = char_error_rate
             no_improvement_since = 0
-            model.save()
+            model.save(md_bool)
             if md_bool:
                 open(FilePaths.fn_accuracy_md, 'w').write('Validation '
                                                           'character'
