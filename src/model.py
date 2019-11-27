@@ -56,6 +56,10 @@ class Model:
         self.update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
 
         with tf.control_dependencies(self.update_ops):
+           # optimizer = tf.train.RMSPropOptimizer(self.learning_rate)
+           # gradients, variables = zip(*optimizer.compute_gradients(self.loss))
+           # gradients, _ = tf.clip_by_global_norm(gradients, 10.0)
+           # self.optimizer = optimizer.apply_gradients(zip(gradients, variables))
             self.optimizer = tf.train.RMSPropOptimizer(self.learning_rate)\
                 .minimize(self.loss)
 
@@ -96,9 +100,11 @@ class Model:
         rnn_input = tf.squeeze(pool, axis=[2])
 
         numHidden = 256
-        cells = [
-            tf.contrib.rnn.LSTMCell(num_units=numHidden, state_is_tuple=True)
-            for _ in range(2)]  # 2 layers
+        cells = []
+        for _ in range(5):
+            cell = tf.contrib.rnn.LSTMCell(num_units=numHidden, state_is_tuple=True)
+            cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=0.5)
+            cells.append(cell)
 
         # stack basic cells
         stacked = tf.contrib.rnn.MultiRNNCell(cells, state_is_tuple=True)
@@ -110,8 +116,11 @@ class Model:
                                                         inputs=rnn_input,
                                                         dtype=rnn_input.dtype)
 
-        concat = tf.expand_dims(tf.concat([fw, bw], 2), 2)
-
+        #concat = tf.expand_dims(tf.concat([fw, bw], 2), 2)
+        concat = tf.concat([fw, bw], 2)
+        self.rnn_output = tf.layers.dense(concat, len(self.char_list) + 1,
+                                          activation='softmax')
+        """
         kernel = tf.Variable(
             tf.truncated_normal([1, 1, numHidden * 2, len(self.char_list) + 1],
                                 stddev=0.1))
@@ -119,7 +128,7 @@ class Model:
         self.rnn_output = tf.squeeze(
             tf.nn.atrous_conv2d(value=concat, filters=kernel, rate=1,
                                 padding='SAME'), axis=[2])
-
+        """
     def setup_od_lstm(self):
         """
         create CNN and rnn layers and return output of these layers
@@ -201,12 +210,12 @@ class Model:
                                                       feature_values[i + 1]],
                                                      stddev=0.1))
             conv = tf.nn.conv2d(pool, kernel, padding="SAME",
-                                strides=(1, strides[i][0], strides[i][1]))
+                                strides=(1, strides[i][0], strides[i][1], 1))
             relu = tf.nn.leaky_relu(conv)
-            drop = tf.nn.dropout(relu, rate=0.4)
+            # drop = tf.nn.dropout(relu, rate=0.4)
             pool, _ = multi_dimensional_rnn_while_loop(feature_values[i + 1],
-                                                       drop, sh=(1, 1),
-                                                       scope_n='layer')
+                                                       relu, sh=(1, 1),
+                                                       scope_n='layer' + str(i))
 
         kernel = tf.Variable(tf.truncated_normal([1, 2, 64, 128], stddev=0.1))
         conv = tf.nn.conv2d(pool, kernel, padding='SAME',
@@ -338,8 +347,7 @@ class Model:
         """
         num_batch_elements = len(batch.images)
         sparse = self.to_sparse(batch.gt_texts)
-        rate = 0.001 # if self.batches_trained < 10 else \
-        #     (0.001 if self.batches_trained < 10000 else 0.001)
+        rate = 0.001
         eval_list = [self.optimizer, self.loss]
         feed_dict = {self.input_imgs: batch.images, self.gt_texts: sparse,
                      self.seq_length:
@@ -390,9 +398,9 @@ class Model:
         """
         self.snap_id += 1
         if md_bool:
-            model_path = os.path.join(my_path, '../model/md_rmsprob_0.4')
+            model_path = os.path.join(my_path, '../model/md_rmsprob_0')
         else:
-            model_path = os.path.join(my_path, '../model/od_rmsprob_0.4')
+            model_path = os.path.join(my_path, '../model/5_lstm_od_ada_0.4')
         self.saver.save(self.session, model_path,
                         global_step=self.snap_id)
 

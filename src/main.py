@@ -52,6 +52,7 @@ def main():
     else:
         print("Wrong argument.")
 
+
 def train(model, loader, md_bool):
     """
     Function that trains Batches in a while loop.
